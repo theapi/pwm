@@ -8,10 +8,12 @@
 
 #define PIN_LED_DEBUG PB5 // The led to blink
 #define PIN_LED_FADE  PB3 // The led to fade - pwm (NB: 8 bit timer 2)
+#define PIN_LED_FADE2  PD3
 
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
-#define T1 500 // timeout value for the blink (mSec)
-
+#define T1 1000 // timeout value for the blink (mSec)
+#define T2 10 // Speed of one pin's fade
+#define T3 10 // Speed of the other pin's fade
 
 /********************************************************************************
 Function Prototypes
@@ -23,11 +25,14 @@ void initPwm(void);
 /********************************************************************************
 Global Variables
 ********************************************************************************/
-
-volatile unsigned char width = 10;
+unsigned char direction;
+unsigned char width;
+unsigned char directionB = 1;
+unsigned char widthB = 254;
 
 volatile unsigned int time1;
-
+volatile unsigned int time2;
+volatile unsigned int time3;
 
 /********************************************************************************
 Interupt Routines
@@ -37,12 +42,15 @@ Interupt Routines
 ISR(TIMER0_COMPA_vect)
 {
     if (time1 > 0)  --time1;
+    if (time2 > 0)  --time2;
+    if (time3 > 0)  --time3;
 }
 
 //timer 2 overflow ISR
 ISR(TIMER2_OVF_vect)
 {
-    OCR2A = width;
+    // This is the pwm interupt.
+    // Needs to be defined even if it has no code in it.
 }
 
 /********************************************************************************
@@ -54,6 +62,10 @@ int main (void)
     // Pins to output
     DDRB = (1 << PIN_LED_FADE) | (1 << PIN_LED_DEBUG);
     PORTB = 0; // all off
+
+    DDRD |= (1 << PIN_LED_FADE2); // output
+    PORTD &= (0 << PIN_LED_FADE2); // LOW
+
 
     initTimer();
     initPwm();
@@ -68,15 +80,50 @@ int main (void)
             time1 = T1;
             // toggle the led
             PORTB ^= (1 << PIN_LED_DEBUG);
+        }
 
+        // A
+        if (time2 == 0) {
+            // reset the timer
+            time2 = T2;
 
-            // Increase the pwm
-            width++;
-            if (width > 200) {
-                width = 10;
+            // Change the pwm
+            if (direction) {
+                width--;
+            } else {
+                width++;
             }
 
+            if (width > 254) {
+                direction = 1;
+            } else if (width == 0) {
+                direction = 0;
+            }
+
+            OCR2A = width;
         }
+
+        // B
+        if (time3 == 0) {
+            // reset the timer
+            time3 = T3;
+
+            // Change the pwm
+            if (directionB) {
+                widthB--;
+            } else {
+                widthB++;
+            }
+
+            if (widthB > 254) {
+                directionB = 1;
+            } else if (widthB == 0) {
+                directionB = 0;
+            }
+
+            OCR2B = widthB;
+        }
+
     }
 }
 
@@ -118,8 +165,8 @@ void initTimer(void)
 void initPwm(void)
 {
 
-    // Fast PWM on timer 2 - 0xFF BOTTOM MAX
-    TCCR2A = (1 << COM2A1) | (1 << WGM21) | (1 << WGM20);
+    // Fast PWM on timer 2 - 0xFF BOTTOM MAX - pin A & B
+    TCCR2A = (1 << COM2A1) | (1 << COM2B1) | (1 << WGM21) | (1 << WGM20);
 
     // Timer/Counter2 Overflow Interrupt Enable
     TIMSK2 = (1 << TOIE2);
@@ -127,6 +174,9 @@ void initPwm(void)
     // 64 prescaler
     TCCR2B = (1 << CS22);
 
-    OCR2A = width;
+    time2 = T2;
+    time3 = T3;
 
+    OCR2A = width;
+    OCR2B = widthB;
 }
