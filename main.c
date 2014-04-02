@@ -1,6 +1,5 @@
 //#define F_CPU 16000000L
 
-// based on http://www.youtube.com/watch?v=ZhIRRyhfhLM
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -19,13 +18,13 @@ Function Prototypes
 ********************************************************************************/
 
 void initTimer(void);
-
+void initPwm(void);
 
 /********************************************************************************
 Global Variables
 ********************************************************************************/
 
-volatile double dutyCycle = 0;
+volatile unsigned char width = 10;
 
 volatile unsigned int time1;
 
@@ -43,7 +42,7 @@ ISR(TIMER0_COMPA_vect)
 //timer 2 overflow ISR
 ISR(TIMER2_OVF_vect)
 {
-    OCR2A = (dutyCycle/100) * 255;
+    OCR2A = width;
 }
 
 /********************************************************************************
@@ -51,52 +50,33 @@ Main
 ********************************************************************************/
 int main (void)
 {
-    //DDRB = 0xFF; // set all to output
-    //PORTB = 0; // all off
 
-    // Set the pins as outputs.
-    DDRB = (1 << PIN_LED_DEBUG);
-
-    DDRB = (1 << PIN_LED_FADE);
-
+    // Pins to output
+    DDRB = (1 << PIN_LED_FADE) | (1 << PIN_LED_DEBUG);
     PORTB = 0; // all off
 
-    // Fast PWM on timer 2 - 0xFF BOTTOM MAX
-    TCCR2A = (1 << COM2A1) | (1 << WGM21) | (1 << WGM20);
-
-    // Timer/Counter2 Overflow Interrupt Enable
-    TIMSK2 = (1 << TOIE2);
-
-    OCR2A = (dutyCycle/100) * 255;
-
-
-
     initTimer();
+    initPwm();
 
     // crank up the ISRs
     sei();
 
-    // Start the timer (after interupts enabled) - No prescaling
-    //TCCR2B = (1 << CS20); // @todo see why this kills timer0
-
     // main loop
     while(1) {
-
-
         if (time1 == 0) {
             // reset the timer
             time1 = T1;
             // toggle the led
             PORTB ^= (1 << PIN_LED_DEBUG);
 
-            // Increase the pwm by 10 %
-            dutyCycle += 10;
-            if (dutyCycle > 100) {
-                dutyCycle = 0;
+
+            // Increase the pwm
+            width++;
+            if (width > 200) {
+                width = 10;
             }
 
         }
-
     }
 }
 
@@ -133,4 +113,20 @@ void initTimer(void)
 
     // Timer initialization
     time1 = T1;
+}
+
+void initPwm(void)
+{
+
+    // Fast PWM on timer 2 - 0xFF BOTTOM MAX
+    TCCR2A = (1 << COM2A1) | (1 << WGM21) | (1 << WGM20);
+
+    // Timer/Counter2 Overflow Interrupt Enable
+    TIMSK2 = (1 << TOIE2);
+
+    // 64 prescaler
+    TCCR2B = (1 << CS22);
+
+    OCR2A = width;
+
 }
