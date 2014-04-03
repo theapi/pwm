@@ -10,10 +10,14 @@
 #define PIN_LED_FADE  PB3 // The led to fade - pwm (NB: 8 bit timer 2)
 #define PIN_LED_FADE2  PD3
 
+
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
-#define T1 1000 // timeout value for the blink (mSec)
-#define T2 10 // Speed of one pin's fade
-#define T3 10 // Speed of the other pin's fade
+#define MILLIS_TICKS 10  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
+
+#define T1 1000 * MILLIS_TICKS // timeout value for the blink (mSec)
+#define T2 10 * MILLIS_TICKS // Speed of one pin's fade
+#define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
+#define T4 10 // ISR calls per step, of 200, of TIMER0_COMPB
 
 /********************************************************************************
 Function Prototypes
@@ -34,16 +38,34 @@ volatile unsigned int time1;
 volatile unsigned int time2;
 volatile unsigned int time3;
 
+volatile unsigned int time4;
+volatile unsigned int step;
+
 /********************************************************************************
 Interupt Routines
 ********************************************************************************/
 
-//timer 0 compare ISR
+//timer 0 compare A ISR
 ISR(TIMER0_COMPA_vect)
 {
     if (time1 > 0)  --time1;
     if (time2 > 0)  --time2;
     if (time3 > 0)  --time3;
+}
+
+//timer 0 compare B ISR
+ISR(TIMER0_COMPB_vect)
+{
+    // Count steps for software pwm with a resolution of 200 steps.
+    if (time4 > 0)  {
+        --time4;
+    } else {
+        time4 = T4;
+        ++step;
+        if (step > 200) {
+            step = 0;
+        }
+    }
 }
 
 //timer 2 overflow ISR
@@ -139,7 +161,7 @@ void initTimer(void)
 
     // Interupt mask register - to enable the interupt (datasheet: 14.9.6)
     // (Bit 1 - OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable)
-    TIMSK0 = (1 << OCIE0A); // (2) turn on timer 0 cmp match ISR
+    TIMSK0 = (1 << OCIE0A) | (1 << OCIE0B); // (2) turn on timer 0 cmp match A ISR (& compare match B)
 
     // Compare register - when to interupt (datasheet: 14.9.4)
     // OCR0A = 249; // set the compare reg to 250 time ticks = 1ms
@@ -147,7 +169,11 @@ void initTimer(void)
     //OCR0A = 50; // 1/5 of 1ms = 0.0002s
     //OCR0A = 30; // 0.00012s = 0.12ms
     //OCR0A = 25; // 0.0001s = 0.1ms
-    OCR0A = COMPARE_REG;
+    //OCR0A = COMPARE_REG
+
+
+    OCR0A = 200; // 0.1ms on a prescaler of 8
+    OCR0B = 10; // 0.005ms  = 200 steps
 
     // Timer mode (datasheet: 14.9.1)
     TCCR0A = (1 << WGM01); // (0b00000010) turn on clear-on-match
@@ -156,10 +182,30 @@ void initTimer(void)
     // 16MHz/64=250kHz so precision of 0.000004 = 4us
     // calculation to show why 64 is required the prescaler:
     // 1 / (16000000 / 64 / 250) = 0.001 = 1ms
-    TCCR0B = ((1 << CS10) | (1 << CS11)); // (0b00000011)(3) clock prescalar to 64
+    //TCCR0B = ((1 << CS01) | (1 << CS00)); // (0b00000011)(3) clock prescalar to 64
+    TCCR0B = ((1 << CS01)); // (0b00000011)(3) clock prescalar to 8
 
     // Timer initialization
     time1 = T1;
+    time4 = T4;
+
+    /*
+    Prescaler of 8
+    1/(16000000 / 8 / 10)
+
+    16MHz/8 = 2MHz
+    0.0000005 = 0.5us precision
+    OCR0A 250 = 0.000125 seconds  = 0.125ms
+    OCR0A 200 = 0.0001 seconds    = 0.1ms    = 10 steps
+    OCR0A 100 = 0.00005 seconds   = 0.05ms   = 20 steps
+    OCR0A 50  = 0.000025 seconds  = 0.025ms  = 40 steps
+    OCR0A 25  = 0.0000125 seconds = 0.0125ms = 80 steps
+    OCR0A 10  = 0.000005 seconds  = 0.005ms  = 200 steps
+
+    for a 180 degree servo ideally there are 180 steps in 1ms
+    since the pulse widths need to be between 1ms & 2 ms for every 20ms
+
+     */
 }
 
 void initPwm(void)
