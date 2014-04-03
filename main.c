@@ -14,10 +14,13 @@
 #define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define MILLIS_TICKS 10  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
 
-#define T1 1000 * MILLIS_TICKS // timeout value for the blink (mSec)
+
+#define T1 1000 * MILLIS_TICKS
 #define T2 10 * MILLIS_TICKS // Speed of one pin's fade
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
-#define T4 10 // ISR calls per step, of 200, of TIMER0_COMPB
+#define T4 1000 * MILLIS_TICKS
+
+#define SERVO_COMP1 1 // The max steps for the first servo
 
 /********************************************************************************
 Function Prototypes
@@ -40,6 +43,7 @@ volatile unsigned int time3;
 
 volatile unsigned int time4;
 volatile unsigned int step;
+volatile unsigned int servoCompare1;
 
 /********************************************************************************
 Interupt Routines
@@ -48,24 +52,39 @@ Interupt Routines
 //timer 0 compare A ISR
 ISR(TIMER0_COMPA_vect)
 {
+    // called every 0.1ms
+
     if (time1 > 0)  --time1;
     if (time2 > 0)  --time2;
     if (time3 > 0)  --time3;
+
+
+
+    if (time1 == 0) {
+        // reset the timer
+        time1 = T1;
+        PORTB ^= (1 << PIN_LED_DEBUG); // toggle
+        //PORTB |= (1 << PIN_LED_DEBUG); // on
+    }
+
 }
 
 //timer 0 compare B ISR
 ISR(TIMER0_COMPB_vect)
 {
-    // Count steps for software pwm with a resolution of 200 steps.
-    if (time4 > 0)  {
-        --time4;
-    } else {
+    // called every 0.005ms - NOPE
+    //Called with TIMER0_COMPA_vect!! so no use.
+
+    /*
+    if (time4 > 0)  --time4;
+
+    if (time4 == 0) {
+        PORTB ^= (1 << PIN_LED_DEBUG); // toggle
+        //PORTB &= (0 << PIN_LED_DEBUG); // off
         time4 = T4;
-        ++step;
-        if (step > 200) {
-            step = 0;
-        }
     }
+*/
+
 }
 
 //timer 2 overflow ISR
@@ -97,12 +116,15 @@ int main (void)
 
     // main loop
     while(1) {
+
+        /*
         if (time1 == 0) {
             // reset the timer
             time1 = T1;
             // toggle the led
-            PORTB ^= (1 << PIN_LED_DEBUG);
+            //PORTB ^= (1 << PIN_LED_DEBUG);
         }
+        */
 
         // A
         if (time2 == 0) {
@@ -161,7 +183,7 @@ void initTimer(void)
 
     // Interupt mask register - to enable the interupt (datasheet: 14.9.6)
     // (Bit 1 - OCIE0A: Timer/Counter0 Output Compare Match A Interrupt Enable)
-    TIMSK0 = (1 << OCIE0A) | (1 << OCIE0B); // (2) turn on timer 0 cmp match A ISR (& compare match B)
+    TIMSK0 = (1 << OCIE0A); // (2) turn on timer 0 compare match ISR
 
     // Compare register - when to interupt (datasheet: 14.9.4)
     // OCR0A = 249; // set the compare reg to 250 time ticks = 1ms
@@ -173,7 +195,7 @@ void initTimer(void)
 
 
     OCR0A = 200; // 0.1ms on a prescaler of 8
-    OCR0B = 10; // 0.005ms  = 200 steps
+    //OCR0B = 10; // 0.005ms  = 200 steps - DAMN - CTC only uese OCROA - back to the drawing board...
 
     // Timer mode (datasheet: 14.9.1)
     TCCR0A = (1 << WGM01); // (0b00000010) turn on clear-on-match
@@ -188,6 +210,9 @@ void initTimer(void)
     // Timer initialization
     time1 = T1;
     time4 = T4;
+
+
+    //servoCompare1 = SERVO_COMP1;
 
     /*
     Prescaler of 8
