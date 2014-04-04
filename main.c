@@ -11,16 +11,16 @@
 #define PIN_LED_FADE2  PD3
 
 
-#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
-#define MILLIS_TICKS 10  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
+//#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
+#define MILLIS_TICKS 40  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted (Nope this is not working as expected)
 
 
-#define T1 1000 * MILLIS_TICKS
+#define T1 1000UL * MILLIS_TICKS
 #define T2 10 * MILLIS_TICKS // Speed of one pin's fade
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
-#define T4 1000 * MILLIS_TICKS
+#define T4 1000UL * MILLIS_TICKS
 
-#define SERVO_COMP1 1 // The max steps for the first servo
+#define SERVO_COMP1 90 // The pulse width (steps) for the first servo
 
 /********************************************************************************
 Function Prototypes
@@ -37,13 +37,14 @@ unsigned char width;
 unsigned char directionB = 1;
 unsigned char widthB = 254;
 
-volatile unsigned int time1;
+
+volatile uint32_t time1;
 volatile unsigned int time2;
 volatile unsigned int time3;
 
-volatile unsigned int time4;
-volatile unsigned int step;
-volatile unsigned int servoCompare1;
+//volatile unsigned int time4;
+//volatile unsigned int step;
+volatile unsigned int servo_compare1;
 
 /********************************************************************************
 Interupt Routines
@@ -52,19 +53,24 @@ Interupt Routines
 //timer 0 compare A ISR
 ISR(TIMER0_COMPA_vect)
 {
-    // called every 0.1ms
+    // called every 0.005ms
 
     if (time1 > 0)  --time1;
     if (time2 > 0)  --time2;
     if (time3 > 0)  --time3;
-
+    //if (time4 > 0)  --time4;
 
 
     if (time1 == 0) {
         // reset the timer
         time1 = T1;
+
         PORTB ^= (1 << PIN_LED_DEBUG); // toggle
         //PORTB |= (1 << PIN_LED_DEBUG); // on
+    }
+
+    if (servo_compare1 == time1) {
+        //PORTB &= (0 << PIN_LED_DEBUG); // off
     }
 
 }
@@ -114,17 +120,18 @@ int main (void)
     // crank up the ISRs
     sei();
 
+
     // main loop
     while(1) {
 
-        /*
+/*
         if (time1 == 0) {
             // reset the timer
             time1 = T1;
             // toggle the led
-            //PORTB ^= (1 << PIN_LED_DEBUG);
+            PORTB ^= (1 << PIN_LED_DEBUG);
         }
-        */
+*/
 
         // A
         if (time2 == 0) {
@@ -194,8 +201,9 @@ void initTimer(void)
     //OCR0A = COMPARE_REG
 
 
-    OCR0A = 200; // 0.1ms on a prescaler of 8
-    //OCR0B = 10; // 0.005ms  = 200 steps - DAMN - CTC only uese OCROA - back to the drawing board...
+    //OCR0A = 200; // 0.1ms on a prescaler of 8
+    OCR0A = 50;
+    //OCR0B = 10; // 0.005ms  = 200 steps - DAMN - CTC only uses OCROA - back to the drawing board...
 
     // Timer mode (datasheet: 14.9.1)
     TCCR0A = (1 << WGM01); // (0b00000010) turn on clear-on-match
@@ -209,23 +217,26 @@ void initTimer(void)
 
     // Timer initialization
     time1 = T1;
-    time4 = T4;
+    //time4 = T4;
 
 
-    //servoCompare1 = SERVO_COMP1;
+    servo_compare1 = SERVO_COMP1;
 
     /*
     Prescaler of 8
     1/(16000000 / 8 / 10)
 
     16MHz/8 = 2MHz
-    0.0000005 = 0.5us precision
+    0.0000005 = 0.0005ms precision
+
+
+
     OCR0A 250 = 0.000125 seconds  = 0.125ms
     OCR0A 200 = 0.0001 seconds    = 0.1ms    = 10 steps
     OCR0A 100 = 0.00005 seconds   = 0.05ms   = 20 steps
     OCR0A 50  = 0.000025 seconds  = 0.025ms  = 40 steps
     OCR0A 25  = 0.0000125 seconds = 0.0125ms = 80 steps
-    OCR0A 10  = 0.000005 seconds  = 0.005ms  = 200 steps
+    OCR0A 10  = 0.000005 seconds  = 0.005ms  = 200 steps (per ms)
 
     for a 180 degree servo ideally there are 180 steps in 1ms
     since the pulse widths need to be between 1ms & 2 ms for every 20ms
