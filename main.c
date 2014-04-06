@@ -77,7 +77,7 @@ ISR(TIMER0_COMPA_vect)
         // Start of the 20ms period so start the pulse.
         PORTB |= (1 << PIN_SERVO1); // on
     } else {
-        if (step >= servo_compare1)  {
+        if (step == servo_compare1)  {
             // Done enough steps, so turn off untill the next period starts.
             PORTB &= ~(1 << PIN_SERVO1); // off
         }
