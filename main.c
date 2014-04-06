@@ -11,7 +11,6 @@
 #define PIN_LED_FADE2  PD3 // hardware pwm (arduino 3)
 #define PIN_SERVO1  PB0 // (arduino 8)
 
-
 //#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define MILLIS_TICKS 100  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
 
@@ -34,6 +33,7 @@ Function Prototypes
 
 void initTimer(void);
 void initPwm(void);
+void initAdc(void);
 
 /********************************************************************************
 Global Variables
@@ -111,9 +111,11 @@ int main (void)
 
     initTimer();
     initPwm();
+    initAdc();
 
     // crank up the ISRs
     sei();
+
 
 
     // main loop
@@ -127,6 +129,23 @@ int main (void)
             PORTB ^= (1 << PIN_LED_DEBUG);
         }
 
+        // Make an ADC reading of the pot.
+        if (ADCSRA & ~(1 << ADSC)) {
+            uint8_t adc_a = 0;
+            adc_a = ADCH;
+            if (adc_a > 250) {
+                servo_compare1 = 250;
+            } else if (adc_a < 60) {
+                servo_compare1 = 60;
+            } else {
+                servo_compare1 = adc_a;
+            }
+            // start another adc reading
+            ADCSRA |= (1 << ADSC);
+        }
+
+
+/*
         // Sweep
         if (time5 == 0) {
             // reset the timer
@@ -141,11 +160,12 @@ int main (void)
 
             if (servo_compare1 > 250) {
                 directionSweep = 1;
-            } else if (servo_compare1 < 50) {
+            } else if (servo_compare1 < 60) {
                 directionSweep = 0;
             }
 
         }
+*/
 
         // A
         if (time2 == 0) {
@@ -277,4 +297,15 @@ void initPwm(void)
 
     OCR2A = width;
     OCR2B = widthB;
+}
+
+void initAdc(void)
+{
+    // Datasheet 23.9.1
+    // ADC (AVCC ref) | (8 bit so only read ADCL) + (Input on A0)
+    ADMUX = (1 << REFS0) | (1 << ADLAR); // ob01100000
+
+    // Datasheet 23.9.2
+    //       (on) | (start a conversion) | (prescaler 128)
+    ADCSRA = (1 << ADEN) | (1 << ADSC) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 }
