@@ -9,7 +9,7 @@
 #define PIN_LED_DEBUG PB5 // The led to blink (arduino 13)
 #define PIN_LED_FADE  PB3 // hardware pwm - (NB: 8 bit timer 2) (arduino 11)
 #define PIN_LED_FADE2  PD3 // hardware pwm (arduino 3)
-#define PIN_SERVO1  PB4 // (arduino 12)
+#define PIN_SERVO1  PB0 // (arduino 8)
 
 
 //#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
@@ -21,7 +21,9 @@
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
 #define T4 20 * MILLIS_TICKS // Servo period of 20ms
 
-#define SERVO_COMP1 150 // The pulse width (steps) for the first servo
+#define T5 20 * MILLIS_TICKS // Servo sweep delay
+
+#define SERVO_COMP1 200 // The pulse width (steps) for the first servo
 //#define SERVO_COMP1 100 // 1ms pulse fully left
 //#define SERVO_COMP1 150 // 1.5ms pulse, centered
 //#define SERVO_COMP1 200 // 2ms pulse fully right
@@ -41,6 +43,7 @@ unsigned char width;
 unsigned char directionB = 1;
 unsigned char widthB = 254;
 
+unsigned char directionSweep;
 
 volatile uint32_t time1;
 volatile unsigned int time2;
@@ -49,6 +52,7 @@ volatile unsigned int time3;
 volatile unsigned int time4;
 volatile unsigned int step;
 volatile unsigned int servo_compare1;
+volatile unsigned int time5;
 
 /********************************************************************************
 Interupt Routines
@@ -63,6 +67,7 @@ ISR(TIMER0_COMPA_vect)
     if (time1 > 0)  --time1;
     if (time2 > 0)  --time2;
     if (time3 > 0)  --time3;
+    if (time5 > 0)  --time5;
 
     if (time4 == 0) {
         // reset the timer
@@ -122,6 +127,25 @@ int main (void)
             PORTB ^= (1 << PIN_LED_DEBUG);
         }
 
+        // Sweep
+        if (time5 == 0) {
+            // reset the timer
+            time5 = T5;
+
+            // Change the position
+            if (directionSweep) {
+                servo_compare1--;
+            } else {
+                servo_compare1++;
+            }
+
+            if (servo_compare1 > 250) {
+                directionSweep = 1;
+            } else if (servo_compare1 < 50) {
+                directionSweep = 0;
+            }
+
+        }
 
         // A
         if (time2 == 0) {
@@ -229,7 +253,7 @@ void initTimer(void)
     // Timer initialization
     time1 = T1;
     time4 = T4;
-
+    time5 = T5;
 
     servo_compare1 = SERVO_COMP1;
 
