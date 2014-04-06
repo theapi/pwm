@@ -15,12 +15,15 @@
 #define MILLIS_TICKS 100  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
 
 
-#define T1 500UL * MILLIS_TICKS
+#define T1 20 * MILLIS_TICKS
 #define T2 10 * MILLIS_TICKS // Speed of one pin's fade
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
 #define T4 1000UL * MILLIS_TICKS
 
-#define SERVO_COMP1 90 // The pulse width (steps) for the first servo
+#define SERVO_COMP1 150 // The pulse width (steps) for the first servo
+//#define SERVO_COMP1 100 // 1ms pulse fully left
+//#define SERVO_COMP1 150 // 1.5ms pulse, centered
+//#define SERVO_COMP1 200 // 2ms pulse fully right
 
 /********************************************************************************
 Function Prototypes
@@ -37,8 +40,8 @@ unsigned char width;
 unsigned char directionB = 1;
 unsigned char widthB = 254;
 
-
-volatile uint32_t time1;
+volatile unsigned int time1;
+//volatile uint32_t time1;
 volatile unsigned int time2;
 volatile unsigned int time3;
 
@@ -53,7 +56,7 @@ Interupt Routines
 //timer 0 compare A ISR
 ISR(TIMER0_COMPA_vect)
 {
-    // called every 0.005ms
+    // 0.01ms = 100 steps (per ms)
 
 
     if (time2 > 0)  --time2;
@@ -62,20 +65,23 @@ ISR(TIMER0_COMPA_vect)
 
 
     if (time1 > 0)  {
+        // Servo pulses are only in the first 2ms of the 20ms period.
+        if (time1 < 2 * MILLIS_TICKS) {
+            // Is it time to stop the pulse
+            if (servo_compare1 == time1) {
+                PORTB &= (0 << PIN_LED_DEBUG); // off
+            }
+        }
+
         --time1;
     } else {
         // reset the timer
         time1 = T1;
 
-        PORTB ^= (1 << PIN_LED_DEBUG); // toggle
-        //PORTB |= (1 << PIN_LED_DEBUG); // on
+        //PORTB ^= (1 << PIN_LED_DEBUG); // toggle
+        PORTB |= (1 << PIN_LED_DEBUG); // on
     }
 
-    /*
-    if (servo_compare1 == time1) {
-        //PORTB &= (0 << PIN_LED_DEBUG); // off
-    }
-*/
 }
 
 //timer 0 compare B ISR
@@ -84,13 +90,6 @@ ISR(TIMER0_COMPB_vect)
     // called every 0.005ms - NOPE
     //Called with TIMER0_COMPA_vect!! so no use.
 
-}
-
-//timer 2 overflow ISR
-ISR(TIMER2_OVF_vect)
-{
-    // This is the pwm interupt.
-    // Needs to be defined even if it has no code in it.
 }
 
 /********************************************************************************
@@ -104,7 +103,7 @@ int main (void)
     PORTB = 0; // all off
 
     DDRD |= (1 << PIN_LED_FADE2); // output
-    PORTD &= (0 << PIN_LED_FADE2); // LOW
+    PORTD &= (1 << PIN_LED_FADE2); // high
 
 
     initTimer();
@@ -246,7 +245,7 @@ void initPwm(void)
     TCCR2A = (1 << COM2A1) | (1 << COM2B1) | (1 << WGM21) | (1 << WGM20);
 
     // Timer/Counter2 Overflow Interrupt Enable
-    TIMSK2 = (1 << TOIE2);
+    //TIMSK2 = (1 << TOIE2);
 
     // 64 prescaler
     TCCR2B = (1 << CS22);
