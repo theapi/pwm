@@ -12,10 +12,10 @@
 
 
 //#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
-#define MILLIS_TICKS 40  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted (Nope this is not working as expected)
+#define MILLIS_TICKS 100  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
 
 
-#define T1 1000UL * MILLIS_TICKS
+#define T1 500UL * MILLIS_TICKS
 #define T2 10 * MILLIS_TICKS // Speed of one pin's fade
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
 #define T4 1000UL * MILLIS_TICKS
@@ -55,13 +55,15 @@ ISR(TIMER0_COMPA_vect)
 {
     // called every 0.005ms
 
-    if (time1 > 0)  --time1;
+
     if (time2 > 0)  --time2;
     if (time3 > 0)  --time3;
     //if (time4 > 0)  --time4;
 
 
-    if (time1 == 0) {
+    if (time1 > 0)  {
+        --time1;
+    } else {
         // reset the timer
         time1 = T1;
 
@@ -69,10 +71,11 @@ ISR(TIMER0_COMPA_vect)
         //PORTB |= (1 << PIN_LED_DEBUG); // on
     }
 
+    /*
     if (servo_compare1 == time1) {
         //PORTB &= (0 << PIN_LED_DEBUG); // off
     }
-
+*/
 }
 
 //timer 0 compare B ISR
@@ -80,16 +83,6 @@ ISR(TIMER0_COMPB_vect)
 {
     // called every 0.005ms - NOPE
     //Called with TIMER0_COMPA_vect!! so no use.
-
-    /*
-    if (time4 > 0)  --time4;
-
-    if (time4 == 0) {
-        PORTB ^= (1 << PIN_LED_DEBUG); // toggle
-        //PORTB &= (0 << PIN_LED_DEBUG); // off
-        time4 = T4;
-    }
-*/
 
 }
 
@@ -200,9 +193,30 @@ void initTimer(void)
     //OCR0A = 25; // 0.0001s = 0.1ms
     //OCR0A = COMPARE_REG
 
+    /*
+    Prescaler of 8
+    1/(16000000 / 8 / 20)
+
+    16MHz/8 = 2MHz
+    0.0000005 = 0.0005ms precision
+
+
+
+    OCR0A 250 = 0.000125 seconds  = 0.125ms
+    OCR0A 200 = 0.0001 seconds    = 0.1ms    = 10 steps
+    OCR0A 100 = 0.00005 seconds   = 0.05ms   = 20 steps
+    OCR0A 50  = 0.000025 seconds  = 0.025ms  = 40 steps
+    OCR0A 25  = 0.0000125 seconds = 0.0125ms = 80 steps
+    OCR0A 20  = 0.00001 seconds   = 0.01ms   = 100 steps (per ms)
+    OCR0A 10  = 0.000005 seconds  = 0.005ms  = 200 steps (per ms)
+
+    for a 180 degree servo ideally there are 180 steps in 1ms
+    since the pulse widths need to be between 1ms & 2 ms for every 20ms
+
+     */
 
     //OCR0A = 200; // 0.1ms on a prescaler of 8
-    OCR0A = 50;
+    OCR0A = 19; // 0.01ms   = 100 steps (per ms) - cannot get 10/0.005ms to work - too slow.
     //OCR0B = 10; // 0.005ms  = 200 steps - DAMN - CTC only uses OCROA - back to the drawing board...
 
     // Timer mode (datasheet: 14.9.1)
@@ -222,26 +236,7 @@ void initTimer(void)
 
     servo_compare1 = SERVO_COMP1;
 
-    /*
-    Prescaler of 8
-    1/(16000000 / 8 / 10)
 
-    16MHz/8 = 2MHz
-    0.0000005 = 0.0005ms precision
-
-
-
-    OCR0A 250 = 0.000125 seconds  = 0.125ms
-    OCR0A 200 = 0.0001 seconds    = 0.1ms    = 10 steps
-    OCR0A 100 = 0.00005 seconds   = 0.05ms   = 20 steps
-    OCR0A 50  = 0.000025 seconds  = 0.025ms  = 40 steps
-    OCR0A 25  = 0.0000125 seconds = 0.0125ms = 80 steps
-    OCR0A 10  = 0.000005 seconds  = 0.005ms  = 200 steps (per ms)
-
-    for a 180 degree servo ideally there are 180 steps in 1ms
-    since the pulse widths need to be between 1ms & 2 ms for every 20ms
-
-     */
 }
 
 void initPwm(void)
