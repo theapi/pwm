@@ -6,19 +6,20 @@
 
 
 
-#define PIN_LED_DEBUG PB5 // The led to blink
-#define PIN_LED_FADE  PB3 // The led to fade - pwm (NB: 8 bit timer 2)
-#define PIN_LED_FADE2  PD3
+#define PIN_LED_DEBUG PB5 // The led to blink (arduino 13)
+#define PIN_LED_FADE  PB3 // hardware pwm - (NB: 8 bit timer 2) (arduino 11)
+#define PIN_LED_FADE2  PD3 // hardware pwm (arduino 3)
+#define PIN_SERVO1  PB4 // (arduino 12)
 
 
 //#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define MILLIS_TICKS 100  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
 
 
-#define T1 20 * MILLIS_TICKS
+#define T1 500UL * MILLIS_TICKS
 #define T2 10 * MILLIS_TICKS // Speed of one pin's fade
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
-#define T4 1000UL * MILLIS_TICKS
+#define T4 20 * MILLIS_TICKS // Servo period of 20ms
 
 #define SERVO_COMP1 150 // The pulse width (steps) for the first servo
 //#define SERVO_COMP1 100 // 1ms pulse fully left
@@ -40,13 +41,13 @@ unsigned char width;
 unsigned char directionB = 1;
 unsigned char widthB = 254;
 
-volatile unsigned int time1;
-//volatile uint32_t time1;
+
+volatile uint32_t time1;
 volatile unsigned int time2;
 volatile unsigned int time3;
 
-//volatile unsigned int time4;
-//volatile unsigned int step;
+volatile unsigned int time4;
+volatile unsigned int step;
 volatile unsigned int servo_compare1;
 
 /********************************************************************************
@@ -59,35 +60,32 @@ ISR(TIMER0_COMPA_vect)
     // 0.01ms = 100 steps (per ms)
 
 
+    if (time1 > 0)  --time1;
     if (time2 > 0)  --time2;
     if (time3 > 0)  --time3;
-    //if (time4 > 0)  --time4;
 
-
-    if (time1 > 0)  {
-        // Servo pulses are only in the first 2ms of the 20ms period.
-        if (time1 < 2 * MILLIS_TICKS) {
-            // Is it time to stop the pulse
-            if (servo_compare1 == time1) {
-                PORTB &= (0 << PIN_LED_DEBUG); // off
-            }
-        }
-
-        --time1;
-    } else {
+    if (time4 == 0) {
         // reset the timer
-        time1 = T1;
+        time4 = T4;
+        step = 0;
 
-        //PORTB ^= (1 << PIN_LED_DEBUG); // toggle
-        PORTB |= (1 << PIN_LED_DEBUG); // on
+        // Start of the 20ms period so start the pulse.
+        PORTB |= (1 << PIN_SERVO1); // on
+    } else {
+        if (step == servo_compare1)  {
+            // Done enough steps, so turn off untill the next period starts.
+            PORTB &= ~(1 << PIN_SERVO1); // off
+        }
+        ++step;
+        --time4;
     }
+
 
 }
 
 //timer 0 compare B ISR
 ISR(TIMER0_COMPB_vect)
 {
-    // called every 0.005ms - NOPE
     //Called with TIMER0_COMPA_vect!! so no use.
 
 }
@@ -99,12 +97,12 @@ int main (void)
 {
 
     // Pins to output
-    DDRB = (1 << PIN_LED_FADE) | (1 << PIN_LED_DEBUG);
+    DDRB = (1 << PIN_LED_FADE) | (1 << PIN_LED_DEBUG) | (1 << PIN_SERVO1);
+    //DDRB = 0xFF; // all output
     PORTB = 0; // all off
 
     DDRD |= (1 << PIN_LED_FADE2); // output
     PORTD &= (1 << PIN_LED_FADE2); // high
-
 
     initTimer();
     initPwm();
@@ -116,14 +114,14 @@ int main (void)
     // main loop
     while(1) {
 
-/*
+
         if (time1 == 0) {
             // reset the timer
             time1 = T1;
             // toggle the led
             PORTB ^= (1 << PIN_LED_DEBUG);
         }
-*/
+
 
         // A
         if (time2 == 0) {
@@ -230,7 +228,7 @@ void initTimer(void)
 
     // Timer initialization
     time1 = T1;
-    //time4 = T4;
+    time4 = T4;
 
 
     servo_compare1 = SERVO_COMP1;
