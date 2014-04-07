@@ -22,7 +22,7 @@
 
 #define T5 20 * MILLIS_TICKS // Servo sweep delay
 
-#define SERVO_COMP1 200 // The pulse width (steps) for the first servo
+#define SERVO_COMP1 150 // The pulse width (steps) for the first servo
 //#define SERVO_COMP1 100 // 1ms pulse fully left
 //#define SERVO_COMP1 150 // 1.5ms pulse, centered
 //#define SERVO_COMP1 200 // 2ms pulse fully right
@@ -257,7 +257,7 @@ void initTimer(void)
      */
 
     //OCR0A = 200; // 0.1ms on a prescaler of 8
-    OCR0A = 19; // 0.01ms   = 100 steps (per ms) - cannot get 10/0.005ms to work - too slow.
+    OCR0A = 20; // 0.01ms   = 100 steps (per ms) - cannot get 10/0.005ms to work - too slow.
     //OCR0B = 10; // 0.005ms  = 200 steps - DAMN - CTC only uses OCROA - back to the drawing board...
 
     // Timer mode (datasheet: 14.9.1)
