@@ -113,6 +113,9 @@ int main (void)
     initPwm();
     initAdc();
 
+    uint8_t servo1_max = 255;
+    uint8_t servo1_min = 65;
+
     // crank up the ISRs
     sei();
 
@@ -129,14 +132,14 @@ int main (void)
             PORTB ^= (1 << PIN_LED_DEBUG);
         }
 
-        // Make an ADC reading of the pot.
+
+        // Read ADC value of the pot when the conversion has completed.
         if (ADCSRA & ~(1 << ADSC)) {
-            uint8_t adc_a = 0;
-            adc_a = ADCH;
-            if (adc_a > 250) {
-                servo_compare1 = 250;
-            } else if (adc_a < 60) {
-                servo_compare1 = 60;
+            uint8_t adc_a = ADCH;
+            if (adc_a > servo1_max) {
+                servo_compare1 = servo1_max;
+            } else if (adc_a < servo1_min) {
+                servo_compare1 = servo1_min;
             } else {
                 servo_compare1 = adc_a;
             }
@@ -302,7 +305,7 @@ void initPwm(void)
 void initAdc(void)
 {
     // Datasheet 23.9.1
-    // ADC (AVCC ref) | (8 bit so only read ADCL) + (Input on A0)
+    // ADC (AVCC ref) | (8 bit so only read ADCH) + (Input on A0)
     ADMUX = (1 << REFS0) | (1 << ADLAR); // ob01100000
 
     // Datasheet 23.9.2
