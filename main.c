@@ -303,7 +303,7 @@ void initTimer0(void)
 
 }
 
-// Servo PWM on timer 0
+// Servo PWM on timer 1
 void initTimer1(void)
 {
     // see http://eliaselectronics.com/atmega-servo-tutorial/
