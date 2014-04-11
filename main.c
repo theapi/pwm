@@ -9,7 +9,8 @@
 #define PIN_LED_DEBUG PB5 // The led to blink (arduino 13)
 #define PIN_LED_FADE  PB3 // hardware pwm - (NB: 8 bit timer 2) (arduino 11)
 #define PIN_LED_FADE2  PD3 // hardware pwm (arduino 3)
-#define PIN_SERVO1  PB0 // (arduino 8)
+#define PIN_SERVO1  PB0 // (arduino 8)  - TIMER0
+#define PIN_SERVO2  PB1 // (arduino 15) - TIMER1
 
 //#define COMPARE_REG 249 // OCR0A when to interupt (datasheet: 14.9.4)
 #define MILLIS_TICKS 100  // number of TIMER0_COMPA_vect ISR calls before a millisecond is counted
@@ -20,7 +21,7 @@
 #define T3 10 * MILLIS_TICKS // Speed of the other pin's fade
 #define T4 20 * MILLIS_TICKS // Servo period of 20ms
 
-#define T5 20 * MILLIS_TICKS // Servo sweep delay
+#define T5 1000UL * MILLIS_TICKS // time5 delay
 
 #define SERVO_COMP1 150 // The pulse width (steps) for the first servo
 //#define SERVO_COMP1 100 // 1ms pulse fully left
@@ -31,9 +32,10 @@
 Function Prototypes
 ********************************************************************************/
 
-void initTimer(void);
-void initPwm(void);
-void initAdc(void);
+void initTimer0(void);
+void initTimer1(void);
+void initPWM(void);
+void initADC(void);
 
 /********************************************************************************
 Global Variables
@@ -52,7 +54,10 @@ volatile unsigned int time3;
 volatile unsigned int time4;
 volatile unsigned int step;
 volatile unsigned int servo_compare1;
-volatile unsigned int time5;
+volatile unsigned long time5;
+
+enum servo2_states {SV2_LEFT, SV2_MID, SV2_RIGHT};
+enum servo2_states servo2_state = SV2_MID;
 
 /********************************************************************************
 Interupt Routines
@@ -109,9 +114,10 @@ int main (void)
     DDRD |= (1 << PIN_LED_FADE2); // output
     PORTD &= (1 << PIN_LED_FADE2); // high
 
-    initTimer();
-    initPwm();
-    initAdc();
+    initTimer0();
+    initTimer1();
+    initPWM();
+    initADC();
 
     uint8_t servo1_max = 255;
     uint8_t servo1_min = 65;
@@ -147,6 +153,21 @@ int main (void)
             ADCSRA |= (1 << ADSC);
         }
 
+
+        if (time5 == 0) {
+            // reset the timer
+            time5 = T5;
+            if (servo2_state == SV2_LEFT) {
+                OCR1A = 4000;
+                servo2_state = SV2_RIGHT;
+            } else if (servo2_state == SV2_RIGHT) {
+                OCR1A = 3000;
+                servo2_state = SV2_MID;
+            } else if (servo2_state == SV2_MID) {
+                OCR1A = 2000;
+                servo2_state = SV2_LEFT;
+            }
+        }
 
 /*
         // Sweep
@@ -221,7 +242,7 @@ Functions
 ********************************************************************************/
 
 
-void initTimer(void)
+void initTimer0(void)
 {
     // set up timer 0 for 1 mSec ticks (timer 0 is an 8 bit timer)
 
@@ -280,10 +301,21 @@ void initTimer(void)
 
     servo_compare1 = SERVO_COMP1;
 
-
 }
 
-void initPwm(void)
+// Servo PWM on timer 0
+void initTimer1(void)
+{
+    // see http://eliaselectronics.com/atmega-servo-tutorial/
+    TCCR1A |= (1 << COM1A1) | (1 << WGM11); // non-inverting mode for OC1A
+    TCCR1B |= (1 << WGM13) | (1 << WGM12) | (1 << CS11); // Mode 14, Prescaler 8
+
+    ICR1 = 40000; // 320000 / 8 = 40000
+
+    DDRB |= (1 << PIN_SERVO2); // OC1A set to output
+}
+
+void initPWM(void)
 {
 
     // Fast PWM on timer 2 - 0xFF BOTTOM MAX - pin A & B
@@ -302,7 +334,7 @@ void initPwm(void)
     OCR2B = widthB;
 }
 
-void initAdc(void)
+void initADC(void)
 {
     // Datasheet 23.9.1
     // ADC (AVCC ref) | (8 bit so only read ADCH) + (Input on A0)
